@@ -54,14 +54,14 @@ def calc(year, start_h, end_h):
 
 rows=[]
 for s,(a,z) in SESSIONS.items():
-    all=pd.concat([calc(y,a,z) for y in YEARS],ignore_index=True)
-    all.to_csv(f"trades_2021_2023_{s.lower()}.csv",index=False)
-    all["month"]=all.exit_time.dt.to_period("M")
-    for p,g in all.groupby("month"):
+    df_all=pd.concat([calc(y,a,z) for y in YEARS],ignore_index=True)
+    df_all.to_csv(f"trades_2021_2023_{s.lower()}.csv",index=False)
+    df_all["month"]=df_all.exit_time.dt.to_period("M")
+    for p,g in df_all.groupby("month"):
         wins=int((g.r>0).sum()); losses=int((g.r<0).sum())
         pf=g.loc[g.r>0,"r"].sum()/abs(g.loc[g.r<0,"r"].sum()) if losses else np.inf
         rows.append([s,str(p),len(g),wins,wins/len(g)*100,g.r.sum(),pf])
-    wins=int((all.r>0).sum()); losses=int((all.r<0).sum())
-    pf=all.loc[all.r>0,"r"].sum()/abs(all.loc[all.r<0,"r"].sum()) if losses else np.inf
-    print(f"TOTAL {s} TRADES={len(all)} WINS={wins} WIN_RATE={wins/len(all)*100:.2f} NET_R={all.r.sum():.3f} PF={pf:.3f}")
+    wins=int((df_all.r>0).sum()); losses=int((df_all.r<0).sum())
+    pf=df_all.loc[df_all.r>0,"r"].sum()/abs(df_all.loc[df_all.r<0,"r"].sum()) if losses else np.inf
+    print(f"TOTAL {s} TRADES={len(df_all)} WINS={wins} WIN_RATE={wins/len(df_all)*100:.2f} NET_R={df_all.r.sum():.3f} PF={pf:.3f}")
 pd.DataFrame(rows,columns=["session","month","trades","wins","win_rate","net_r","pf"]).to_csv("monthly_sessions_2021_2023.csv",index=False)
