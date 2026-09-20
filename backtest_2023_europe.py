@@ -52,3 +52,5 @@ if len(tr):
  print("TRADES=",len(tr)); print("WINS=",sum(tr.r>0),"LOSSES=",sum(tr.r<0),"WIN_RATE=",round((tr.r>0).mean()*100,2)); print("NET_R=",round(tr.r.sum(),3)); print("AVG_R=",round(tr.r.mean(),4)); print("PROFIT_FACTOR=",round(tr.loc[tr.r>0,"r"].sum()/abs(tr.loc[tr.r<0,"r"].sum()),3)); cr=tr.r.cumsum(); print("MAX_DRAWDOWN_R=",round((cr.cummax()-cr).max(),3)); print(tr.groupby("reason").r.agg(["count","sum","mean"]).to_string())
 else: print("TRADES=0")
 tr.to_csv("trades_2023_europe.csv",index=False)
+
+# Trigger Europe backtest rerun.
