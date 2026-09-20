@@ -8,6 +8,8 @@ on:
       - "DAT_ASCII_JPXJPY_M1_2023.csv"
       - ".github/workflows/backtest_2021_2023_sessions_monthly.yml"
   workflow_dispatch:
+  issues:
+    types: [opened]
 jobs:
   backtest:
     runs-on: ubuntu-latest
