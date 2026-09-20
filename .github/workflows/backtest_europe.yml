@@ -1,0 +1,20 @@
+name: Backtest JP225 2023 Europe
+on:
+  push:
+    paths:
+      - "backtest_2023_europe.py"
+      - "DAT_ASCII_JPXJPY_M1_2023.csv"
+  workflow_dispatch:
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install pandas numpy
+      - run: python backtest_2023_europe.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jp225-backtest-2023-europe
+          path: trades_2023_europe.csv
