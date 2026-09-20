@@ -20,3 +20,4 @@ jobs:
         with:
           name: jp225-backtest-2021-2023-europe-monthly
           path: trades_2021_2023_europe.csv
+# trigger
