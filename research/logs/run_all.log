@@ -1,0 +1,16 @@
+=== M5: 358339 bougies ===
+  FVG done, 9s
+  MeanReversion done, 27s
+  TrendFollowing done, 64s
+  OrderBlock done, 75s
+=== M15: 119821 bougies ===
+  FVG done, 78s
+  MeanReversion done, 84s
+  TrendFollowing done, 96s
+  OrderBlock done, 100s
+=== M30: 60150 bougies ===
+  FVG done, 102s
+  MeanReversion done, 105s
+  TrendFollowing done, 111s
+  OrderBlock done, 113s
+TOTAL TIME 112.99512386322021

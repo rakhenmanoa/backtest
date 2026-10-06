@@ -62,3 +62,55 @@ AAAAMMJJ HHMMSS;ouverture;plus haut;plus bas;clôture;volume
 ```
 
 Les scripts acceptent aussi les virgules, points-virgules ou espaces comme séparateurs.
+
+---
+
+# Étude multi-instruments : US30 / DE30 (DAX), Exness vs Dukascopy
+
+Cette seconde partie regroupe les données et le code de l'étude de stratégies sur l'indice US30 et le DAX (DE30), menée sur les données réelles du courtier Exness puis comparée à Dukascopy.
+
+## Données
+
+Toutes les données sont des bougies d'une minute, compressées (`.csv.gz`), un fichier par année. Aucune n'a été modifiée : seuls le format (JSON ou CSV géant vers CSV compressé) et le découpage par année changent.
+
+| Dossier | Contenu | Période | Colonnes |
+|---------|---------|---------|----------|
+| `exness/us30/` | US30, export MT5 Exness | 2021-01 à 2026-09 | `datetime, open, high, low, close, tick_volume, spread, real_volume` |
+| `exness/de30/` | DE30 (DAX), export MT5 Exness | 2021 à 2026-10 | idem |
+| `dukascopy/us30/` | US30, prix bid Dukascopy | 2016 à 2026-08 | `timestamp (ms UTC), open, high, low, close` |
+| `dukascopy/de30/` | DE30, prix bid Dukascopy | 2016 à 2026-08 | idem |
+| `dukascopy/jp225/` | JP225 (Nikkei), Dukascopy | 2016 à 2020 | idem |
+| `dukascopy/xauusd/` | Or (XAUUSD), Dukascopy | 2021 à 2026-08 | idem |
+
+À savoir avant d'utiliser les données :
+
+- **Spread Exness** : la colonne `spread` est en « points » MT5 bruts. La précision de prix est de 0,1, donc `spread en unités de prix = spread × 0,1` (spread moyen mesuré : US30 ≈ 5,4, DE30 ≈ 5,5). Dukascopy ne fournit pas de spread.
+- **Début de 2021 chez Exness** : les premières lignes de `exness/us30/us30_M1_2021.csv.gz` et `exness/de30/de30_M1_2021.csv.gz` sont des bougies journalières avec `spread = 0` (historique M1 indisponible à cette date). Pour le DE30, les vraies bougies M1 démarrent le 2021-07-16. `build_datasets.py` écarte les lignes à spread nul pour le DE30.
+- **Exness et Dukascopy ne sont pas interchangeables** : seuls ~16 % des signaux coïncident entre les deux flux, avec un décalage de prix moyen de +19 à +29 points sur l'US30. Les résultats sur Dukascopy ne se transposent pas tels quels au courtier.
+- Les fichiers `dukascopy/DAT_ASCII_JPXJPY_M1_*.csv` de la première partie sont laissés à leur place, car les scripts et workflows existants les référencent.
+
+## Code de l'étude (`research/`)
+
+| Dossier | Contenu |
+|---------|---------|
+| `research/build_datasets.py` | Reconstruit les DataFrames pickle (M1, M5, M15, M30, spreads, ratio US30/DAX) depuis les `.csv.gz`, dans `research/work/` (ignoré par git). Vérifié identique aux jeux utilisés pendant l'étude. |
+| `research/engines/` | Moteurs de backtest : FVG (comblement de gap), RSI (avec ou sans confirmation, filtre de tendance), retour à la moyenne, suivi de tendance, Order Block, pairs trading US30/DAX (sortie fixe, retour à la moyenne, trailing stop). |
+| `research/runs/` | Scripts de balayage de paramètres. `run_pairs_trailing.py` reproduit le résultat final. |
+| `research/results/`, `research/logs/` | Sorties CSV et journaux des balayages. |
+| `ea_mql5/` | Les Expert Advisors MetaTrader 5 produits pendant l'étude (dont `Pairs_US30_DAX_Trailing_EA.mq5`). |
+
+```bash
+pip install pandas numpy
+python research/build_datasets.py
+cd research/work
+PYTHONPATH=../engines python ../runs/run_pairs_trailing.py
+```
+
+## Principaux résultats
+
+R net = résultat par trade en multiples du risque, après coût réel du spread, calculé trade par trade.
+
+- **FVG, RSI, retour à la moyenne et suivi de tendance sur l'US30 seul** : aucune configuration rentable une fois le spread réel appliqué. Plusieurs résultats flatteurs venaient d'un artefact : les écarts de prix à la bougie d'ouverture de 00h GMT, non exploitables en pratique. Le filtrage doit se faire dans la simulation, pas après coup.
+- **Pairs trading sur le ratio US30/DAX avec trailing stop** (SMA 20, entrée à 3,0 ATR d'écart, stop initial 6 ATR, trailing activé à 2,5 ATR et placé à 0,75 ATR du meilleur ratio) : 4 765 trades, 68 % de réussite, **R net moyen +0,063** avec les spreads réels des deux jambes (+0,211 avant coûts). Long et short sont symétriques (+0,062 et +0,064).
+- **Robustesse limitée** : 4 années sur 6 nettement positives (2021, 2022, 2025, 2026), 2023 et 2024 proches de zéro ou légèrement négatives. Un trailing stop remplace avantageusement le take-profit fixe, qui ne rapportait rien net de coûts.
+- Un raccourcissement de la SMA à 3 périodes améliorait le R brut mais détériorait le R net : artefact de coût, la distance de stop en unités de ratio devenant plus courte pour un coût fixe.
