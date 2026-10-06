@@ -106,7 +106,7 @@ Toutes les données sont des bougies d'une minute, compressées (`.csv.gz`), un 
 | `research/engines/` | Moteurs de backtest : FVG (comblement de gap), RSI (avec ou sans confirmation, filtre de tendance), retour à la moyenne, suivi de tendance, Order Block, pairs trading US30/DAX (sortie fixe, retour à la moyenne, trailing stop). |
 | `research/runs/` | Scripts de balayage de paramètres. `run_pairs_trailing.py` reproduit le résultat final. |
 | `research/results/`, `research/logs/` | Sorties CSV et journaux des balayages. |
-| `ea_mql5/` | Les Expert Advisors MetaTrader 5 produits pendant l'étude (dont `Pairs_US30_DAX_Trailing_EA.mq5`). |
+| `EA/` | Tous les scripts MetaTrader 5 (EA, scripts d'export de données) : FVG, tendance, RSI, retour à la moyenne, pairs trading US30/DAX (`Pairs_US30_DAX_Trailing_EA.mq5`) et `BlackCrows_WhiteSoldiers_RSI.mq5`. |
 | `results/pdf/` | Synthèses PDF des stratégies étudiées (FVG, JP225, retour à la moyenne). |
 | `results/indicateurs/` | Versions successives de l'indicateur FVG (fichiers texte). |
 
