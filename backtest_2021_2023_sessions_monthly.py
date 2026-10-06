@@ -4,7 +4,7 @@ YEARS=[2021,2022,2023]
 SESSIONS={"ASIA":(0,8),"EUROPE":(7,16),"AMERICA":(13,21),"ALL":(0,24)}
 
 def calc(year, start_h, end_h):
-    f=f"DAT_ASCII_JPXJPY_M1_{year}.csv"
+    f=f"dukascopy/DAT_ASCII_JPXJPY_M1_{year}.csv"
     raw=pd.read_csv(f,header=None,sep=r"[,;\s]+",engine="python").iloc[:,:7]
     raw.columns=["date","time","open","high","low","close","volume"]
     raw["dt"]=pd.to_datetime(raw.date.astype(str)+raw.time.astype(str).str.zfill(6),format="%Y%m%d%H%M%S",errors="coerce")

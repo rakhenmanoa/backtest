@@ -3,9 +3,9 @@ on:
   push:
     paths:
       - "backtest_2021_2023_europe_monthly.py"
-      - "DAT_ASCII_JPXJPY_M1_2021.csv"
-      - "DAT_ASCII_JPXJPY_M1_2022.csv"
-      - "DAT_ASCII_JPXJPY_M1_2023.csv"
+      - "dukascopy/DAT_ASCII_JPXJPY_M1_2021.csv"
+      - "dukascopy/DAT_ASCII_JPXJPY_M1_2022.csv"
+      - "dukascopy/DAT_ASCII_JPXJPY_M1_2023.csv"
   workflow_dispatch:
 jobs:
   backtest:

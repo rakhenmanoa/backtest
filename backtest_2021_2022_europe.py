@@ -5,7 +5,7 @@ YEARS = [2021, 2022]
 # Triggered for GitHub Actions execution.
 
 def run_year(year):
-    FILE = f"DAT_ASCII_JPXJPY_M1_{year}.csv"
+    FILE = f"dukascopy/DAT_ASCII_JPXJPY_M1_{year}.csv"
     raw = pd.read_csv(FILE, header=None, sep=r"[,;\s]+", engine="python")
     raw = raw.iloc[:, :7]
     raw.columns = ["date","time","open","high","low","close","volume"]

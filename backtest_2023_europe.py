@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-FILE="DAT_ASCII_JPXJPY_M1_2023.csv"
+FILE="dukascopy/DAT_ASCII_JPXJPY_M1_2023.csv"
 raw=pd.read_csv(FILE,header=None,sep=r"[,;\s]+",engine="python")
 raw=raw.iloc[:,:7]; raw.columns=["date","time","open","high","low","close","volume"][:raw.shape[1]]
 raw["dt"]=pd.to_datetime(raw["date"].astype(str)+raw["time"].astype(str).str.zfill(6),format="%Y%m%d%H%M%S",errors="coerce")

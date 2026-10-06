@@ -2,7 +2,7 @@ import pandas as pd, numpy as np
 YEARS=[2021,2022,2023]
 
 def calc(year):
- f=f"DAT_ASCII_JPXJPY_M1_{year}.csv"; raw=pd.read_csv(f,header=None,sep=r"[,;\s]+",engine="python").iloc[:,:7]; raw.columns=["date","time","open","high","low","close","volume"]
+ f=f"dukascopy/DAT_ASCII_JPXJPY_M1_{year}.csv"; raw=pd.read_csv(f,header=None,sep=r"[,;\s]+",engine="python").iloc[:,:7]; raw.columns=["date","time","open","high","low","close","volume"]
  raw["dt"]=pd.to_datetime(raw.date.astype(str)+raw.time.astype(str).str.zfill(6),format="%Y%m%d%H%M%S",errors="coerce")
  for c in ["open","high","low","close"]: raw[c]=pd.to_numeric(raw[c],errors="coerce")
  raw=raw.dropna(subset=["dt","open","high","low","close"]).set_index("dt").sort_index()

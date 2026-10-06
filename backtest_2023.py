@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-FILE = "DAT_ASCII_JPXJPY_M1_2023.csv"
+FILE = "dukascopy/DAT_ASCII_JPXJPY_M1_2023.csv"
 
 # Dukascopy-style ASCII format is commonly:
 # YYYYMMDD,HHMMSS,OPEN,HIGH,LOW,CLOSE,VOLUME

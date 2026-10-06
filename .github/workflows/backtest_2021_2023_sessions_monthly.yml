@@ -3,9 +3,9 @@ on:
   push:
     paths:
       - "backtest_2021_2023_sessions_monthly.py"
-      - "DAT_ASCII_JPXJPY_M1_2021.csv"
-      - "DAT_ASCII_JPXJPY_M1_2022.csv"
-      - "DAT_ASCII_JPXJPY_M1_2023.csv"
+      - "dukascopy/DAT_ASCII_JPXJPY_M1_2021.csv"
+      - "dukascopy/DAT_ASCII_JPXJPY_M1_2022.csv"
+      - "dukascopy/DAT_ASCII_JPXJPY_M1_2023.csv"
       - ".github/workflows/backtest_2021_2023_sessions_monthly.yml"
   workflow_dispatch:
   issues:
