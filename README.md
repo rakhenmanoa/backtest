@@ -1,5 +1,9 @@
 # Backtest JP225 : retour à la moyenne sur le VWAP
 
+> **Avertissement : résultats non concluants.**
+> Malheureusement, aucune stratégie testée dans ce dépôt n'a démontré d'avantage fiable et rentable. De plus, **des bogues et des biais de backtest ont faussé une partie des résultats** : artefacts de la bougie d'ouverture de 00h GMT (écarts de prix non exploitables), simulations dont le moteur a été reconstruit après une perte de code et dont les chiffres ne coïncident pas avec les versions antérieures, coûts de spread parfois estimés avec des valeurs différentes selon les tests (7,0 puis 5,35 points sur l'US30), exécution des stops vérifiée sur la clôture seule pour le ratio US30/DAX, et nombreux balayages de paramètres sur les mêmes données (risque de surajustement). Les chiffres affichés ci-dessous, y compris le R net positif du pairs trading, sont à considérer comme des pistes de recherche et **non comme une preuve de rentabilité**. Ne pas trader en réel sur cette base.
+
+
 Tests rétrospectifs d'une stratégie intraday de retour à la moyenne sur l'indice **Nikkei 225 coté en yen (JPXJPY)**, à partir de données minute Dukascopy de 2021 à 2023.
 
 ## La stratégie
@@ -67,6 +71,8 @@ Les scripts acceptent aussi les virgules, points-virgules ou espaces comme sépa
 
 # Étude multi-instruments : US30 / DE30 (DAX), Exness vs Dukascopy
 
+> Résultats non concluants, et biais de backtest connus : voir l'avertissement en haut de ce fichier.
+
 Cette seconde partie regroupe les données et le code de l'étude de stratégies sur l'indice US30 et le DAX (DE30), menée sur les données réelles du courtier Exness puis comparée à Dukascopy.
 
 ## Données
@@ -98,6 +104,9 @@ Toutes les données sont des bougies d'une minute, compressées (`.csv.gz`), un 
 | `research/runs/` | Scripts de balayage de paramètres. `run_pairs_trailing.py` reproduit le résultat final. |
 | `research/results/`, `research/logs/` | Sorties CSV et journaux des balayages. |
 | `ea_mql5/` | Les Expert Advisors MetaTrader 5 produits pendant l'étude (dont `Pairs_US30_DAX_Trailing_EA.mq5`). |
+| `results/pdf/` | Synthèses PDF des stratégies étudiées (FVG, JP225, retour à la moyenne). |
+| `results/indicateurs/` | Versions successives de l'indicateur FVG (fichiers texte). |
+| `autres/` | Données hors périmètre principal : `jp225_m4`, `jp225_m5`, `usdjpy_m4`, `usdjpy_m5` (bougies de 4 et 5 minutes, format `AAAAMMJJ HHMMSS;o;h;l;c;volume`, compressées en `.csv.gz`). Origine non précisée. |
 
 ```bash
 pip install pandas numpy

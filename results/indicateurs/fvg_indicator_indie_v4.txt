@@ -1,0 +1,183 @@
+# indie:lang_version = 5
+# FVG Fill Indicator - detecte les Fair Value Gaps, leur remplissage complet,
+# la confirmation de sortie (marge 0.5xATR), et filtre sur la vitesse de reaction
+# (remplissage <=5 bougies, confirmation <=3 bougies).
+
+from indie import indicator, param, color, MainContext, MutSeriesF, plot
+from indie.algorithms import Atr
+from indie.plot import Marker, marker_style, marker_position
+import math
+
+
+@indicator("FVG Fill Signals", overlay_main_pane=True)
+@param.int("atr_length", default=14, min=2, max=100, title="Periode ATR")
+@param.float("exit_margin_atr", default=0.5, min=0.0, max=3.0, title="Marge de sortie (xATR)")
+@param.int("max_wait_fill", default=5, min=1, max=50, title="Max bougies pour remplissage")
+@param.int("max_wait_exit", default=3, min=1, max=50, title="Max bougies pour confirmation")
+@param.int("session1_start_h", default=7, min=0, max=23, title="Fenetre 1 - heure debut (GMT)")
+@param.int("session1_end_h", default=10, min=0, max=23, title="Fenetre 1 - heure fin (GMT)")
+@param.int("session2_start_h", default=13, min=0, max=23, title="Fenetre 2 - heure debut (GMT)")
+@param.int("session2_end_h", default=16, min=0, max=23, title="Fenetre 2 - heure fin (GMT)")
+@param.bool("use_session2", default=True, title="Activer 2e fenetre horaire")
+class Main(MainContext):
+    def __init__(self, atr_length, exit_margin_atr, max_wait_fill, max_wait_exit,
+                 session1_start_h, session1_end_h, session2_start_h, session2_end_h, use_session2):
+        self.atr = Atr.new(atr_length)
+
+        self.bull_active = MutSeriesF.new(0.0)
+        self.bull_top = MutSeriesF.new(math.nan)
+        self.bull_bot = MutSeriesF.new(math.nan)
+        self.bull_formed_bar = MutSeriesF.new(-1.0)
+        self.bull_filled = MutSeriesF.new(0.0)
+        self.bull_filled_bar = MutSeriesF.new(-1.0)
+
+        self.bear_active = MutSeriesF.new(0.0)
+        self.bear_top = MutSeriesF.new(math.nan)
+        self.bear_bot = MutSeriesF.new(math.nan)
+        self.bear_formed_bar = MutSeriesF.new(-1.0)
+        self.bear_filled = MutSeriesF.new(0.0)
+        self.bear_filled_bar = MutSeriesF.new(-1.0)
+
+        self.long_signal = MutSeriesF.new(0.0)
+        self.short_signal = MutSeriesF.new(0.0)
+
+    def in_window(self, session1_start_h, session1_end_h, session2_start_h, session2_end_h, use_session2):
+        h = self.time.hour
+
+        after_start1 = session1_start_h <= h
+        before_end1 = h < session1_end_h
+        in_s1 = after_start1 and before_end1
+
+        after_start2 = session2_start_h <= h
+        before_end2 = h < session2_end_h
+        in_s2_time = after_start2 and before_end2
+        in_s2 = use_session2 and in_s2_time
+
+        return in_s1 or in_s2
+
+    def calc(self, atr_length, exit_margin_atr, max_wait_fill, max_wait_exit,
+              session1_start_h, session1_end_h, session2_start_h, session2_end_h, use_session2):
+        i = self.bar_index
+        atr_val = self.atr[0]
+
+        self.long_signal[0] = 0.0
+        self.short_signal[0] = 0.0
+
+        too_early = i < 3
+        atr_missing = math.isnan(atr_val)
+        atr_zero = atr_val <= 0
+        skip_bar = too_early or atr_missing or atr_zero
+        if skip_bar:
+            return
+
+        window_ok = self.in_window(session1_start_h, session1_end_h, session2_start_h,
+                                     session2_end_h, use_session2)
+
+        # ===== 1. DETECTION D'UN NOUVEAU FVG =====
+        bull_free = self.bull_active[0] < 0.5
+        if window_ok and bull_free:
+            gap_up = self.low[0] > self.high[2]
+            if gap_up:
+                self.bull_active[0] = 1.0
+                self.bull_bot[0] = self.high[2]
+                self.bull_top[0] = self.low[0]
+                self.bull_formed_bar[0] = float(i)
+                self.bull_filled[0] = 0.0
+
+        bear_free = self.bear_active[0] < 0.5
+        if window_ok and bear_free:
+            gap_down = self.high[0] < self.low[2]
+            if gap_down:
+                self.bear_active[0] = 1.0
+                self.bear_top[0] = self.low[2]
+                self.bear_bot[0] = self.high[0]
+                self.bear_formed_bar[0] = float(i)
+                self.bear_filled[0] = 0.0
+
+        # ===== 2. GESTION DU FVG HAUSSIER EN ATTENTE =====
+        bull_is_active = self.bull_active[0] > 0.5
+        if bull_is_active:
+            bars_since_formed = float(i) - self.bull_formed_bar[0]
+            bull_not_filled = self.bull_filled[0] < 0.5
+
+            if bull_not_filled:
+                fill_expired = bars_since_formed > max_wait_fill
+                if fill_expired:
+                    self.bull_active[0] = 0.0
+                else:
+                    touched_bottom = self.low[0] <= self.bull_bot[0]
+                    if touched_bottom:
+                        self.bull_filled[0] = 1.0
+                        self.bull_filled_bar[0] = float(i)
+            else:
+                bars_since_filled = float(i) - self.bull_filled_bar[0]
+                trigger = self.bull_top[0] + exit_margin_atr * atr_val
+                exit_expired = bars_since_filled > max_wait_exit
+                if exit_expired:
+                    self.bull_active[0] = 0.0
+                else:
+                    confirmed = self.close[0] > trigger
+                    if confirmed:
+                        self.long_signal[0] = 1.0
+                        self.bull_active[0] = 0.0
+
+        # ===== 3. GESTION DU FVG BAISSIER EN ATTENTE =====
+        bear_is_active = self.bear_active[0] > 0.5
+        if bear_is_active:
+            bars_since_formed_b = float(i) - self.bear_formed_bar[0]
+            bear_not_filled = self.bear_filled[0] < 0.5
+
+            if bear_not_filled:
+                fill_expired_b = bars_since_formed_b > max_wait_fill
+                if fill_expired_b:
+                    self.bear_active[0] = 0.0
+                else:
+                    touched_top = self.high[0] >= self.bear_top[0]
+                    if touched_top:
+                        self.bear_filled[0] = 1.0
+                        self.bear_filled_bar[0] = float(i)
+            else:
+                bars_since_filled_b = float(i) - self.bear_filled_bar[0]
+                trigger_b = self.bear_bot[0] - exit_margin_atr * atr_val
+                exit_expired_b = bars_since_filled_b > max_wait_exit
+                if exit_expired_b:
+                    self.bear_active[0] = 0.0
+                else:
+                    confirmed_b = self.close[0] < trigger_b
+                    if confirmed_b:
+                        self.short_signal[0] = 1.0
+                        self.bear_active[0] = 0.0
+
+    @plot.marker(style=marker_style.LABEL, position=marker_position.BELOW, color="green")
+    def long_marker(self):
+        is_long = self.long_signal[0] > 0.5
+        if is_long:
+            return Marker(text="LONG")
+        return Marker(math.nan)
+
+    @plot.marker(style=marker_style.LABEL, position=marker_position.ABOVE, color="red")
+    def short_marker(self):
+        is_short = self.short_signal[0] > 0.5
+        if is_short:
+            return Marker(text="SHORT")
+        return Marker(math.nan)
+
+    @plot.line(color=color.rgba(0, 200, 0, 0.4))
+    def bull_zone_top(self):
+        active = self.bull_active[0] > 0.5
+        return self.bull_top[0] if active else math.nan
+
+    @plot.line(color=color.rgba(0, 200, 0, 0.4))
+    def bull_zone_bot(self):
+        active = self.bull_active[0] > 0.5
+        return self.bull_bot[0] if active else math.nan
+
+    @plot.line(color=color.rgba(200, 0, 0, 0.4))
+    def bear_zone_top(self):
+        active = self.bear_active[0] > 0.5
+        return self.bear_top[0] if active else math.nan
+
+    @plot.line(color=color.rgba(200, 0, 0, 0.4))
+    def bear_zone_bot(self):
+        active = self.bear_active[0] > 0.5
+        return self.bear_bot[0] if active else math.nan

@@ -1,0 +1,148 @@
+# indie:lang_version = 5
+# FVG Fill Indicator - detecte les Fair Value Gaps, leur remplissage complet,
+# la confirmation de sortie (marge 0.5xATR), et filtre sur la vitesse de reaction
+# (remplissage <=5 bougies, confirmation <=3 bougies).
+
+from indie import indicator, param, color, MainContext, MutSeriesF, plot
+from indie.algorithms import Atr
+from indie.plot import Marker, marker_style, marker_position
+import math
+
+
+@indicator("FVG Fill Signals", overlay_main_pane=True)
+@param.int("atr_length", default=14, min=2, max=100, title="Periode ATR")
+@param.float("exit_margin_atr", default=0.5, min=0.0, max=3.0, title="Marge de sortie (xATR)")
+@param.int("max_wait_fill", default=5, min=1, max=50, title="Max bougies pour remplissage")
+@param.int("max_wait_exit", default=3, min=1, max=50, title="Max bougies pour confirmation")
+@param.int("session1_start_h", default=7, min=0, max=23, title="Fenetre 1 - heure debut (GMT)")
+@param.int("session1_end_h", default=10, min=0, max=23, title="Fenetre 1 - heure fin (GMT)")
+@param.int("session2_start_h", default=13, min=0, max=23, title="Fenetre 2 - heure debut (GMT)")
+@param.int("session2_end_h", default=16, min=0, max=23, title="Fenetre 2 - heure fin (GMT)")
+@param.bool("use_session2", default=True, title="Activer 2e fenetre horaire")
+class Main(MainContext):
+    def __init__(self, atr_length, exit_margin_atr, max_wait_fill, max_wait_exit,
+                 session1_start_h, session1_end_h, session2_start_h, session2_end_h, use_session2):
+        self.atr = Atr.new(atr_length)
+
+        # Etat FVG haussier: on stocke tout en float (0.0/1.0 pour les booleens,
+        # les index de bougies aussi en float) pour eviter les soucis d'import de types.
+        self.bull_active = MutSeriesF.new(0.0)
+        self.bull_top = MutSeriesF.new(math.nan)
+        self.bull_bot = MutSeriesF.new(math.nan)
+        self.bull_formed_bar = MutSeriesF.new(-1.0)
+        self.bull_filled = MutSeriesF.new(0.0)
+        self.bull_filled_bar = MutSeriesF.new(-1.0)
+
+        # Etat FVG baissier
+        self.bear_active = MutSeriesF.new(0.0)
+        self.bear_top = MutSeriesF.new(math.nan)
+        self.bear_bot = MutSeriesF.new(math.nan)
+        self.bear_formed_bar = MutSeriesF.new(-1.0)
+        self.bear_filled = MutSeriesF.new(0.0)
+        self.bear_filled_bar = MutSeriesF.new(-1.0)
+
+        self.long_signal = MutSeriesF.new(0.0)
+        self.short_signal = MutSeriesF.new(0.0)
+
+    def in_window(self, session1_start_h, session1_end_h, session2_start_h, session2_end_h, use_session2):
+        h = self.time.hour
+        in_s1 = (session1_start_h <= h) and (h < session1_end_h)
+        in_s2 = use_session2 and (session2_start_h <= h) and (h < session2_end_h)
+        return in_s1 or in_s2
+
+    def calc(self, atr_length, exit_margin_atr, max_wait_fill, max_wait_exit,
+              session1_start_h, session1_end_h, session2_start_h, session2_end_h, use_session2):
+        i = self.bar_index
+        atr_val = self.atr[0]
+
+        self.long_signal[0] = 0.0
+        self.short_signal[0] = 0.0
+
+        if i < 3 or math.isnan(atr_val) or atr_val <= 0:
+            return
+
+        window_ok = self.in_window(session1_start_h, session1_end_h, session2_start_h,
+                                     session2_end_h, use_session2)
+
+        # ===== 1. DETECTION D'UN NOUVEAU FVG =====
+        if window_ok and self.bull_active[0] < 0.5:
+            if self.low[0] > self.high[2]:
+                self.bull_active[0] = 1.0
+                self.bull_bot[0] = self.high[2]
+                self.bull_top[0] = self.low[0]
+                self.bull_formed_bar[0] = float(i)
+                self.bull_filled[0] = 0.0
+
+        if window_ok and self.bear_active[0] < 0.5:
+            if self.high[0] < self.low[2]:
+                self.bear_active[0] = 1.0
+                self.bear_top[0] = self.low[2]
+                self.bear_bot[0] = self.high[0]
+                self.bear_formed_bar[0] = float(i)
+                self.bear_filled[0] = 0.0
+
+        # ===== 2. GESTION DU FVG HAUSSIER EN ATTENTE =====
+        if self.bull_active[0] > 0.5:
+            bars_since_formed = float(i) - self.bull_formed_bar[0]
+
+            if self.bull_filled[0] < 0.5:
+                if bars_since_formed > max_wait_fill:
+                    self.bull_active[0] = 0.0
+                elif self.low[0] <= self.bull_bot[0]:
+                    self.bull_filled[0] = 1.0
+                    self.bull_filled_bar[0] = float(i)
+            else:
+                bars_since_filled = float(i) - self.bull_filled_bar[0]
+                trigger = self.bull_top[0] + exit_margin_atr * atr_val
+                if bars_since_filled > max_wait_exit:
+                    self.bull_active[0] = 0.0
+                elif self.close[0] > trigger:
+                    self.long_signal[0] = 1.0
+                    self.bull_active[0] = 0.0
+
+        # ===== 3. GESTION DU FVG BAISSIER EN ATTENTE =====
+        if self.bear_active[0] > 0.5:
+            bars_since_formed = float(i) - self.bear_formed_bar[0]
+
+            if self.bear_filled[0] < 0.5:
+                if bars_since_formed > max_wait_fill:
+                    self.bear_active[0] = 0.0
+                elif self.high[0] >= self.bear_top[0]:
+                    self.bear_filled[0] = 1.0
+                    self.bear_filled_bar[0] = float(i)
+            else:
+                bars_since_filled = float(i) - self.bear_filled_bar[0]
+                trigger = self.bear_bot[0] - exit_margin_atr * atr_val
+                if bars_since_filled > max_wait_exit:
+                    self.bear_active[0] = 0.0
+                elif self.close[0] < trigger:
+                    self.short_signal[0] = 1.0
+                    self.bear_active[0] = 0.0
+
+    @plot("Long Signal", style=marker_style.LABEL, marker_position=marker_position.BELOW, color="green")
+    def long_marker(self):
+        if self.long_signal[0] > 0.5:
+            return Marker(text="LONG")
+        return Marker(math.nan)
+
+    @plot("Short Signal", style=marker_style.LABEL, marker_position=marker_position.ABOVE, color="red")
+    def short_marker(self):
+        if self.short_signal[0] > 0.5:
+            return Marker(text="SHORT")
+        return Marker(math.nan)
+
+    @plot("Bull FVG Top", color=color.rgba(0, 200, 0, 0.4))
+    def bull_zone_top(self):
+        return self.bull_top[0] if self.bull_active[0] > 0.5 else math.nan
+
+    @plot("Bull FVG Bottom", color=color.rgba(0, 200, 0, 0.4))
+    def bull_zone_bot(self):
+        return self.bull_bot[0] if self.bull_active[0] > 0.5 else math.nan
+
+    @plot("Bear FVG Top", color=color.rgba(200, 0, 0, 0.4))
+    def bear_zone_top(self):
+        return self.bear_top[0] if self.bear_active[0] > 0.5 else math.nan
+
+    @plot("Bear FVG Bottom", color=color.rgba(200, 0, 0, 0.4))
+    def bear_zone_bot(self):
+        return self.bear_bot[0] if self.bear_active[0] > 0.5 else math.nan

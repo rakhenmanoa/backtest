@@ -1,0 +1,183 @@
+# indie:lang_version = 5
+# FVG Fill Indicator - detecte les Fair Value Gaps, leur remplissage complet,
+# la confirmation de sortie (marge 0.5xATR), et filtre sur la vitesse de reaction
+# (remplissage <=5 bougies, confirmation <=3 bougies).
+
+from indie import indicator, param, color, MainContext, plot
+from indie.algorithms import Atr
+from indie.plot import Marker, marker_style, marker_position
+from datetime import datetime
+import math
+
+
+@indicator("FVG Fill Signals", overlay_main_pane=True)
+@plot.marker(title="Long Signal", style=marker_style.LABEL, position=marker_position.BELOW, color=color.GREEN)
+@plot.marker(title="Short Signal", style=marker_style.LABEL, position=marker_position.ABOVE, color=color.RED)
+@plot.line(title="Bull FVG Top", color=color.rgba(0, 200, 0, 0.4))
+@plot.line(title="Bull FVG Bottom", color=color.rgba(0, 200, 0, 0.4))
+@plot.line(title="Bear FVG Top", color=color.rgba(200, 0, 0, 0.4))
+@plot.line(title="Bear FVG Bottom", color=color.rgba(200, 0, 0, 0.4))
+@param.int("atr_length", default=14, min=2, max=100, title="Periode ATR")
+@param.float("exit_margin_atr", default=0.5, min=0.0, max=3.0, title="Marge de sortie (xATR)")
+@param.int("max_wait_fill", default=5, min=1, max=50, title="Max bougies pour remplissage")
+@param.int("max_wait_exit", default=3, min=1, max=50, title="Max bougies pour confirmation")
+@param.int("session1_start_h", default=7, min=0, max=23, title="Fenetre 1 - heure debut (GMT)")
+@param.int("session1_end_h", default=10, min=0, max=23, title="Fenetre 1 - heure fin (GMT)")
+@param.int("session2_start_h", default=13, min=0, max=23, title="Fenetre 2 - heure debut (GMT)")
+@param.int("session2_end_h", default=16, min=0, max=23, title="Fenetre 2 - heure fin (GMT)")
+@param.bool("use_session2", default=True, title="Activer 2e fenetre horaire")
+class Main(MainContext):
+    def __init__(self):
+        self.bull_active = self.new_var(0.0)
+        self.bull_top = self.new_var(math.nan)
+        self.bull_bot = self.new_var(math.nan)
+        self.bull_formed_bar = self.new_var(-1.0)
+        self.bull_filled = self.new_var(0.0)
+        self.bull_filled_bar = self.new_var(-1.0)
+
+        self.bear_active = self.new_var(0.0)
+        self.bear_top = self.new_var(math.nan)
+        self.bear_bot = self.new_var(math.nan)
+        self.bear_formed_bar = self.new_var(-1.0)
+        self.bear_filled = self.new_var(0.0)
+        self.bear_filled_bar = self.new_var(-1.0)
+
+        self.long_signal = self.new_var(0.0)
+        self.short_signal = self.new_var(0.0)
+
+    def in_window(self, session1_start_h: int, session1_end_h: int, session2_start_h: int,
+                  session2_end_h: int, use_session2: bool) -> bool:
+        ts = self.time[0]
+        too_big = ts > 1000000000000.0
+        ts_seconds = ts / 1000.0 if too_big else ts
+        dt = datetime.utcfromtimestamp(ts_seconds)
+        h = dt.hour
+
+        after_start1 = session1_start_h <= h
+        before_end1 = h < session1_end_h
+        in_s1 = after_start1 and before_end1
+
+        after_start2 = session2_start_h <= h
+        before_end2 = h < session2_end_h
+        in_s2_time = after_start2 and before_end2
+        in_s2 = use_session2 and in_s2_time
+
+        return in_s1 or in_s2
+
+    def calc(self, atr_length: int, exit_margin_atr: float, max_wait_fill: int, max_wait_exit: int,
+              session1_start_h: int, session1_end_h: int, session2_start_h: int, session2_end_h: int,
+              use_session2: bool):
+        atr = Atr.new(atr_length)
+        i = self.bar_index
+        atr_val = atr[0]
+
+        self.long_signal.set(0.0)
+        self.short_signal.set(0.0)
+
+        too_early = i < 3
+        atr_missing = math.isnan(atr_val)
+        atr_zero = atr_val <= 0
+        skip_bar = too_early or atr_missing or atr_zero
+
+        if not skip_bar:
+            window_ok = self.in_window(session1_start_h, session1_end_h, session2_start_h,
+                                         session2_end_h, use_session2)
+
+            # ===== 1. DETECTION D'UN NOUVEAU FVG =====
+            bull_free = self.bull_active.get() < 0.5
+            if window_ok and bull_free:
+                gap_up = self.low[0] > self.high[2]
+                if gap_up:
+                    self.bull_active.set(1.0)
+                    self.bull_bot.set(self.high[2])
+                    self.bull_top.set(self.low[0])
+                    self.bull_formed_bar.set(float(i))
+                    self.bull_filled.set(0.0)
+
+            bear_free = self.bear_active.get() < 0.5
+            if window_ok and bear_free:
+                gap_down = self.high[0] < self.low[2]
+                if gap_down:
+                    self.bear_active.set(1.0)
+                    self.bear_top.set(self.low[2])
+                    self.bear_bot.set(self.high[0])
+                    self.bear_formed_bar.set(float(i))
+                    self.bear_filled.set(0.0)
+
+            # ===== 2. GESTION DU FVG HAUSSIER EN ATTENTE =====
+            bull_is_active = self.bull_active.get() > 0.5
+            if bull_is_active:
+                bars_since_formed = float(i) - self.bull_formed_bar.get()
+                bull_not_filled = self.bull_filled.get() < 0.5
+
+                if bull_not_filled:
+                    fill_expired = bars_since_formed > max_wait_fill
+                    if fill_expired:
+                        self.bull_active.set(0.0)
+                    else:
+                        touched_bottom = self.low[0] <= self.bull_bot.get()
+                        if touched_bottom:
+                            self.bull_filled.set(1.0)
+                            self.bull_filled_bar.set(float(i))
+                else:
+                    bars_since_filled = float(i) - self.bull_filled_bar.get()
+                    trigger = self.bull_top.get() + exit_margin_atr * atr_val
+                    exit_expired = bars_since_filled > max_wait_exit
+                    if exit_expired:
+                        self.bull_active.set(0.0)
+                    else:
+                        confirmed = self.close[0] > trigger
+                        if confirmed:
+                            self.long_signal.set(1.0)
+                            self.bull_active.set(0.0)
+
+            # ===== 3. GESTION DU FVG BAISSIER EN ATTENTE =====
+            bear_is_active = self.bear_active.get() > 0.5
+            if bear_is_active:
+                bars_since_formed_b = float(i) - self.bear_formed_bar.get()
+                bear_not_filled = self.bear_filled.get() < 0.5
+
+                if bear_not_filled:
+                    fill_expired_b = bars_since_formed_b > max_wait_fill
+                    if fill_expired_b:
+                        self.bear_active.set(0.0)
+                    else:
+                        touched_top = self.high[0] >= self.bear_top.get()
+                        if touched_top:
+                            self.bear_filled.set(1.0)
+                            self.bear_filled_bar.set(float(i))
+                else:
+                    bars_since_filled_b = float(i) - self.bear_filled_bar.get()
+                    trigger_b = self.bear_bot.get() - exit_margin_atr * atr_val
+                    exit_expired_b = bars_since_filled_b > max_wait_exit
+                    if exit_expired_b:
+                        self.bear_active.set(0.0)
+                    else:
+                        confirmed_b = self.close[0] < trigger_b
+                        if confirmed_b:
+                            self.short_signal.set(1.0)
+                            self.bear_active.set(0.0)
+
+        # ===== VALEURS DE SORTIE (meme ordre que les decorateurs @plot.* ci-dessus) =====
+        is_long = self.long_signal.get() > 0.5
+        long_marker_val = Marker(value=self.low[0], text="LONG") if is_long else Marker(value=math.nan)
+
+        is_short = self.short_signal.get() > 0.5
+        short_marker_val = Marker(value=self.high[0], text="SHORT") if is_short else Marker(value=math.nan)
+
+        bull_on = self.bull_active.get() > 0.5
+        bull_top_val = self.bull_top.get() if bull_on else math.nan
+        bull_bot_val = self.bull_bot.get() if bull_on else math.nan
+
+        bear_on = self.bear_active.get() > 0.5
+        bear_top_val = self.bear_top.get() if bear_on else math.nan
+        bear_bot_val = self.bear_bot.get() if bear_on else math.nan
+
+        return (
+            long_marker_val,
+            short_marker_val,
+            bull_top_val,
+            bull_bot_val,
+            bear_top_val,
+            bear_bot_val,
+        )
