@@ -85,14 +85,17 @@ Toutes les données sont des bougies d'une minute, compressées (`.csv.gz`), un 
 | `exness/de30/` | DE30 (DAX), export MT5 Exness | 2021 à 2026-10 | idem |
 | `dukascopy/us30/` | US30, prix bid Dukascopy | 2016 à 2026-08 | `timestamp (ms UTC), open, high, low, close` |
 | `dukascopy/de30/` | DE30, prix bid Dukascopy | 2016 à 2026-08 | idem |
-| `dukascopy/jp225/` | JP225 (Nikkei), Dukascopy | 2016 à 2020 | idem |
+| `dukascopy/jp225/` | JP225 (Nikkei), M1 | 2016 à 2026-08 | 2016-2020 : `timestamp, open, high, low, close` (UTC) ; 2021-2026 : `datetime, open, high, low, close, volume` (voir ci-dessous) |
 | `dukascopy/xauusd/` | Or (XAUUSD), Dukascopy | 2021 à 2026-08 | idem |
+| `dukascopy/usdjpy/` | USD/JPY, M1 | 2021 à 2026-08 | `datetime, open, high, low, close, volume` (voir ci-dessous) |
 
 À savoir avant d'utiliser les données :
 
 - **Spread Exness** : la colonne `spread` est en « points » MT5 bruts. La précision de prix est de 0,1, donc `spread en unités de prix = spread × 0,1` (spread moyen mesuré : US30 ≈ 5,4, DE30 ≈ 5,5). Dukascopy ne fournit pas de spread.
 - **Début de 2021 chez Exness** : les premières lignes de `exness/us30/us30_M1_2021.csv.gz` et `exness/de30/de30_M1_2021.csv.gz` sont des bougies journalières avec `spread = 0` (historique M1 indisponible à cette date). Pour le DE30, les vraies bougies M1 démarrent le 2021-07-16. `build_datasets.py` écarte les lignes à spread nul pour le DE30.
 - **Exness et Dukascopy ne sont pas interchangeables** : seuls ~16 % des signaux coïncident entre les deux flux, avec un décalage de prix moyen de +19 à +29 points sur l'US30. Les résultats sur Dukascopy ne se transposent pas tels quels au courtier.
+- **JP225 2021-2026 et USDJPY** : fichiers fournis sous les noms `jp225_m4/m5.csv` et `usdjpy_m4/m5.csv`. Malgré ce nom, ce sont bien des bougies **d'une minute** (pour le JP225 2021-2023, les lignes sont strictement identiques aux fichiers `DAT_ASCII_JPXJPY_M1_*` du dépôt). Leur colonne `datetime` est au format `AAAAMMJJ HHMMSS` **dans l'heure de la source, et non en UTC** (la semaine démarre vers 18h ou 17h le dimanche). Cette heure suit un changement d'heure : l'heure du changement apparaît deux fois (par exemple le 2021-10-31 à 19h00, avec des lignes parfois différentes dans la seconde occurrence en 2024). Toutes les lignes sont conservées, sans dédoublonnage, et il n'y a pas de volume exploitable. Le fournisseur n'est pas indiqué dans les fichiers ; ils sont rangés avec Dukascopy parce qu'ils ont le même format que les données déjà présentes sous ce nom. Les années 2016-2020 du JP225 sont en UTC, avec un autre format de colonnes : ne pas les concaténer sans convertir.
+- **Pas de données Exness pour le JP225, l'USDJPY et l'or** : aucun export Exness n'a été fourni pour ces instruments (seulement US30 et DE30). Les dossiers `exness/jp225`, `exness/usdjpy` et `exness/xauusd` n'existent donc pas encore.
 - Les fichiers `dukascopy/DAT_ASCII_JPXJPY_M1_*.csv` de la première partie sont laissés à leur place, car les scripts et workflows existants les référencent.
 
 ## Code de l'étude (`research/`)
@@ -106,7 +109,6 @@ Toutes les données sont des bougies d'une minute, compressées (`.csv.gz`), un 
 | `ea_mql5/` | Les Expert Advisors MetaTrader 5 produits pendant l'étude (dont `Pairs_US30_DAX_Trailing_EA.mq5`). |
 | `results/pdf/` | Synthèses PDF des stratégies étudiées (FVG, JP225, retour à la moyenne). |
 | `results/indicateurs/` | Versions successives de l'indicateur FVG (fichiers texte). |
-| `autres/` | Données hors périmètre principal : `jp225_m4`, `jp225_m5`, `usdjpy_m4`, `usdjpy_m5` (bougies de 4 et 5 minutes, format `AAAAMMJJ HHMMSS;o;h;l;c;volume`, compressées en `.csv.gz`). Origine non précisée. |
 
 ```bash
 pip install pandas numpy
